@@ -1,6 +1,6 @@
 # abook_parser
 
-parser for the abook CLI
+parser for the [abook](https://github.com/hhirsch/abook) CLI
 
 ## Installation
 
