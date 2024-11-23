@@ -4,7 +4,7 @@ parser for the abook CLI
 
 ## Installation
 
-Requires `python3.9+`
+Requires `python3.12+`
 
 To install with pip, run:
 
