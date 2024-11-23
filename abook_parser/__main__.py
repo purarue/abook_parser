@@ -1,8 +1,8 @@
 import contextlib
 from pathlib import Path
-from typing import Literal, get_args, assert_never
+from typing import Literal, get_args, assert_never, Dict, Any
 
-from .parser import AbookData
+from .parser import AbookData, AbookFile, Query
 
 import click
 
@@ -67,6 +67,56 @@ def parse(output_type: OutputType, output: Path, file: Path, sort_key: str) -> N
         )
 
         out.write(data)
+
+
+@main.command(short_help="Edit an item in the addressbook")
+@click.option(
+    "--ignore-case/--no-ignore-case",
+    default=True,
+    help="ignore case in query",
+)
+@click.option(
+    "-q",
+    "--query",
+    type=str,
+    default=None,
+    help="query string to search for",
+)
+@click.argument(
+    "FILE",
+    type=click.Path(exists=True, path_type=Path, allow_dash=False),
+    required=True,
+)
+def edit(file: Path, query: str, ignore_case: bool) -> None:
+    from pyfzf import FzfPrompt
+
+    ab = AbookFile(path=file)
+
+    fzf = FzfPrompt(default_options=["--no-multi"])
+
+    changes = False
+
+    found_key: int | None = None
+    found_val: Dict[str, Any] | None = None
+
+    if query:
+        try:
+            found_key, found_val = ab.query(
+                Query.from_str(query, ignore_case=ignore_case)
+            )
+        except RuntimeError as e:
+            return click.echo(str(e), err=True)
+    else:
+        try:
+            found_key, found_val = ab.fzf_pick(fzf)
+        except RuntimeError as e:
+            return click.echo(str(e), err=True)
+
+    if click.confirm(f"Edit {found_key}: {found_val}?", default=True):
+        raise RuntimeError("TODO")
+
+    if changes:
+        ab.write()
 
 
 if __name__ == "__main__":

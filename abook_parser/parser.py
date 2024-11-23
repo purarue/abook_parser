@@ -1,11 +1,48 @@
+from __future__ import annotations
+import re
 import json
 import configparser
 import io
 
-from typing import Literal, Dict, List
+from typing import Literal, Dict, List, NamedTuple, Any, Tuple, TYPE_CHECKING, TextIO
 from pathlib import Path
 
+if TYPE_CHECKING:
+    from pyfzf import FzfPrompt
+
+
 OutputType = Literal["abook", "json"]
+
+
+SEPS = [":", "="]
+
+
+class Query(NamedTuple):
+    key: str
+    val: str
+    ignore_case: bool
+
+    @classmethod
+    def from_str(cls, s: str, ignore_case: bool) -> "Query":
+        for sep in SEPS:
+            if sep not in s:
+                continue
+            key, val = s.split(sep, maxsplit=1)
+            return cls(key.lower(), val, ignore_case=ignore_case)
+        else:
+            raise ValueError("Could not parse query: " + s)
+
+
+def render_contact_io(key: int, val: Dict[str, Any], fp: TextIO) -> None:
+    fp.write(f"\n[{key}]\n")
+    for k, v in val.items():
+        fp.write(f"{k}={v}\n")
+
+
+def render_contact_str(key: int, val: Dict[str, Any]) -> str:
+    buf = io.StringIO()
+    render_contact_io(key, val, buf)
+    return buf.getvalue()
 
 
 class AbookData:
@@ -46,6 +83,15 @@ class AbookData:
 
         return cls(items={int(k): v for k, v in data.items()}, format=format)
 
+    def keys(self) -> List[str]:
+        from collections import Counter
+
+        c: Counter[str] = Counter()
+        for val in self.items.values():
+            for k in val:
+                c[k] += 1
+        return [k for k in dict(c.most_common()).keys()]
+
     def sort(self, sort_key: str) -> None:
         has_sort_key: List[Dict[str, str]] = []
         cant_sort: List[Dict[str, str]] = []
@@ -60,6 +106,38 @@ class AbookData:
 
         self.items = {i: data for i, data in enumerate(has_sort_key + cant_sort)}
 
+    def fzf_pick(self, fzf: FzfPrompt) -> Tuple[int, Dict[str, Any]]:
+        possible_keys = self.keys()
+        chosen: list[str] = fzf.prompt(possible_keys)
+        if not chosen:
+            raise RuntimeError("Aborted")
+        assert len(chosen) == 1
+        ch = chosen[0]
+        possible_vals = {k: v for (k, v) in self.items.items() if ch in v}
+        mem: Dict[str, int] = {}
+        for k, v in possible_vals.items():
+            prompt = f"{k}: {" ".join(f'{vk}={vv}' for vk, vv in v.items())}"
+            mem[prompt] = k
+        chosen = fzf.prompt(mem)
+        if not chosen:
+            raise RuntimeError("Aborted")
+        found_key = mem[chosen[0]]
+        found_val = possible_vals[found_key]
+        return found_key, found_val
+
+    def query(self, query: Query) -> Tuple[int, Dict[str, Any]]:
+        for key, val in self.items.items():
+            for vkey in val:
+                vlower = vkey.lower()
+                if query.key == vlower:
+                    if query.ignore_case:
+                        query_val, search_for_val = query.val.lower(), val[vkey].lower()
+                    else:
+                        query_val, search_for_val = query.val, val[vkey]
+                    if re.search(query_val, search_for_val):
+                        return key, val
+        raise RuntimeError("Query not found")
+
     def to_abook_fmt(self) -> str:
         buf = io.StringIO()
         buf.write("# abook addressbook file\n\n[format]\n")
@@ -69,9 +147,7 @@ class AbookData:
         buf.write("\n")
 
         for key, val in self.items.items():
-            buf.write(f"\n[{key}]\n")
-            for k, v in val.items():
-                buf.write(f"{k}={v}\n")
+            render_contact_io(key, val, buf)
 
         return buf.getvalue()
 
