@@ -1,6 +1,6 @@
 # abook_parser
 
-parser for the [abook](https://github.com/hhirsch/abook) CLI
+parser for the [abook](https://abook.sourceforge.io/) CLI
 
 ## Installation
 
@@ -14,7 +14,7 @@ pip install git+https://github.com/purarue/abook_parser
 
 ## Usage
 
-This can read the addressbook, sort it by some key, and print a formatted version (either `JSON` or the `abook` addressbook format.
+This can read the addressbook, sort it by some key, and print a formatted version (either `JSON` or the `abook` addressbook format).
 
 ```
 Usage: abook_parser parse [OPTIONS] FILE
