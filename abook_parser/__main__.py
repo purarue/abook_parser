@@ -1,8 +1,8 @@
 import contextlib
 from pathlib import Path
-from typing import Literal, get_args, assert_never, Dict, Any
+from typing import Literal, get_args, assert_never, Dict
 
-from .parser import AbookData, AbookFile, Query
+from .parser import AbookData, AbookFile, Query, parse_contact_str, render_contact_str
 
 import click
 
@@ -97,7 +97,7 @@ def edit(file: Path, query: str, ignore_case: bool) -> None:
     changes = False
 
     found_key: int | None = None
-    found_val: Dict[str, Any] | None = None
+    found_val: Dict[str, str] | None = None
 
     if query:
         try:
@@ -112,10 +112,21 @@ def edit(file: Path, query: str, ignore_case: bool) -> None:
         except RuntimeError as e:
             return click.echo(str(e), err=True)
 
-    if click.confirm(f"Edit {found_key}: {found_val}?", default=True):
-        raise RuntimeError("TODO")
+    rendered = render_contact_str(found_key, found_val).strip()
+    fixed = click.edit(rendered)
+    if fixed is not None:
+        found = parse_contact_str(fixed)
+        assert len(found) == 1, "expected exactly one item in edited text"
+        fkey = list(found)[0]
+        assert fkey == found_key, f"expected key {fkey} to match {found_key}"
+        new_found_val = found[found_key]
+
+        if new_found_val != found_val:
+            ab.items[found_key] = new_found_val
+            changes = True
 
     if changes:
+        click.echo(f"Writing changes to {file}", err=True)
         ab.write()
 
 

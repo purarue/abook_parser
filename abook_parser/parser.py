@@ -4,7 +4,7 @@ import json
 import configparser
 import io
 
-from typing import Literal, Dict, List, NamedTuple, Any, Tuple, TYPE_CHECKING, TextIO
+from typing import Literal, Dict, List, NamedTuple, Tuple, TYPE_CHECKING, TextIO
 from pathlib import Path
 
 if TYPE_CHECKING:
@@ -33,16 +33,25 @@ class Query(NamedTuple):
             raise ValueError("Could not parse query: " + s)
 
 
-def render_contact_io(key: int, val: Dict[str, Any], fp: TextIO) -> None:
+def render_contact_io(key: int, val: Dict[str, str], fp: TextIO) -> None:
     fp.write(f"\n[{key}]\n")
     for k, v in val.items():
         fp.write(f"{k}={v}\n")
 
 
-def render_contact_str(key: int, val: Dict[str, Any]) -> str:
+def render_contact_str(key: int, val: Dict[str, str]) -> str:
     buf = io.StringIO()
     render_contact_io(key, val, buf)
     return buf.getvalue()
+
+
+def parse_contact_str(s: str) -> Dict[int, Dict[str, str]]:
+    config = configparser.ConfigParser()
+    config.read_string(s)
+    data = {}
+    for section in config.sections():
+        data[int(section)] = dict(config.items(section))
+    return data
 
 
 class AbookData:
@@ -106,7 +115,7 @@ class AbookData:
 
         self.items = {i: data for i, data in enumerate(has_sort_key + cant_sort)}
 
-    def fzf_pick(self, fzf: FzfPrompt) -> Tuple[int, Dict[str, Any]]:
+    def fzf_pick(self, fzf: FzfPrompt) -> Tuple[int, Dict[str, str]]:
         possible_keys = self.keys()
         chosen: list[str] = fzf.prompt(possible_keys)
         if not chosen:
@@ -125,7 +134,7 @@ class AbookData:
         found_val = possible_vals[found_key]
         return found_key, found_val
 
-    def query(self, query: Query) -> Tuple[int, Dict[str, Any]]:
+    def query(self, query: Query) -> Tuple[int, Dict[str, str]]:
         for key, val in self.items.items():
             for vkey in val:
                 vlower = vkey.lower()
