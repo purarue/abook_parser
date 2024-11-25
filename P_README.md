@@ -17,29 +17,19 @@ pip install git+https://github.com/purarue/abook_parser
 This can read the addressbook, sort it by some key, and print a formatted version (either `JSON` or the `abook` addressbook format).
 
 ```
-Usage: abook_parser parse [OPTIONS] FILE
-
-  Parse the addressbook file, and sort it by the name field
-
-Options:
-  -t, --output-type [abook|json]  output format type
-  -k, --sort-key TEXT             sort addressbook items by key
-  -o, --output PATH               output file path
-  --help                          Show this message and exit.
+>>>PMARK
+perl -E 'print "`"x3, "\n"'
+python3 -m abook_parser parse --help
+perl -E 'print "`"x3, "\n"'
 ```
 
 It also has commands to `add` or `edit` and item with a [`fzf`](https://github.com/junegunn/fzf)-based interactive mode.
 
 ```
-Usage: abook_parser edit [OPTIONS] FILE
-
-  Edit a field in the addressbook file
-
-Options:
-  --ignore-case / --no-ignore-case
-                                  ignore case in query
-  -q, --query TEXT                query string to search for
-  --help                          Show this message and exit.
+>>>PMARK
+perl -E 'print "`"x3, "\n"'
+python3 -m abook_parser edit --help
+perl -E 'print "`"x3, "\n"'
 ```
 
 ### Tests
