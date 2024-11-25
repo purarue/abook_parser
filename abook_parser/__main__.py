@@ -1,8 +1,8 @@
 import contextlib
 from pathlib import Path
-from typing import Literal, get_args, assert_never, Dict
+from typing import Literal, get_args, assert_never
 
-from .parser import AbookData, AbookFile, Query, parse_contact_str, render_contact_str
+from .parser import AbookData, AbookFile
 
 import click
 
@@ -15,7 +15,7 @@ def main() -> None:
 OutputType = Literal["abook", "json"]
 
 
-@main.command()
+@main.command(short_help="parse addressbook file")
 @click.option(
     "-t",
     "--output-type",
@@ -34,7 +34,10 @@ OutputType = Literal["abook", "json"]
     help="output file path",
 )
 @click.argument(
-    "FILE", type=click.Path(exists=True, path_type=Path, allow_dash=True), required=True
+    "FILE",
+    type=click.Path(exists=True, path_type=Path, allow_dash=True),
+    required=True,
+    envvar="ABOOK_FILE",
 )
 def parse(output_type: OutputType, output: Path, file: Path, sort_key: str) -> None:
     """
@@ -69,7 +72,7 @@ def parse(output_type: OutputType, output: Path, file: Path, sort_key: str) -> N
         out.write(data)
 
 
-@main.command(short_help="Edit an item in the addressbook")
+@main.command(short_help="add item")
 @click.option(
     "--ignore-case/--no-ignore-case",
     default=True,
@@ -86,48 +89,34 @@ def parse(output_type: OutputType, output: Path, file: Path, sort_key: str) -> N
     "FILE",
     type=click.Path(exists=True, path_type=Path, allow_dash=False),
     required=True,
+    envvar="ABOOK_FILE",
 )
 def edit(file: Path, query: str, ignore_case: bool) -> None:
-    from pyfzf import FzfPrompt
-
     ab = AbookFile(path=file)
-
-    fzf = FzfPrompt(default_options=["--no-multi"])
-
-    changes = False
-
-    found_key: int | None = None
-    found_val: Dict[str, str] | None = None
-
-    if query:
-        try:
-            found_key, found_val = ab.query(
-                Query.from_str(query, ignore_case=ignore_case)
-            )
-        except RuntimeError as e:
-            return click.echo(str(e), err=True)
-    else:
-        try:
-            found_key, found_val = ab.fzf_pick(fzf)
-        except RuntimeError as e:
-            return click.echo(str(e), err=True)
-
-    rendered = render_contact_str(found_key, found_val).strip()
-    fixed = click.edit(rendered)
-    if fixed is not None:
-        found = parse_contact_str(fixed)
-        assert len(found) == 1, "expected exactly one item in edited text"
-        fkey = list(found)[0]
-        assert fkey == found_key, f"expected key {fkey} to match {found_key}"
-        new_found_val = found[found_key]
-
-        if new_found_val != found_val:
-            ab.items[found_key] = new_found_val
-            changes = True
+    changes = ab.prompt_edit(
+        query=query,
+        ignore_case=ignore_case,
+    )
 
     if changes:
         click.echo(f"Writing changes to {file}", err=True)
         ab.write()
+    else:
+        click.echo("No changes made, skipping write", err=True)
+
+
+@main.command(short_help="add item")
+@click.argument(
+    "FILE",
+    type=click.Path(exists=True, path_type=Path, allow_dash=False),
+    required=True,
+    envvar="ABOOK_FILE",
+)
+def add(file: Path) -> None:
+    ab = AbookFile(path=file)
+    click.echo(f"Loaded addressbook with {len(ab.items)} items...", err=True)
+    ab.prompt_add()
+    ab.write()
 
 
 if __name__ == "__main__":

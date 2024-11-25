@@ -3,12 +3,20 @@ import re
 import json
 import configparser
 import io
+from functools import cache
 
-from typing import Literal, Dict, List, NamedTuple, Tuple, TYPE_CHECKING, TextIO
+
+import click
+from typing import (
+    Literal,
+    NamedTuple,
+    Tuple,
+    TextIO,
+    Optional,
+)
 from pathlib import Path
 
-if TYPE_CHECKING:
-    from pyfzf import FzfPrompt
+from pyfzf import FzfPrompt
 
 
 OutputType = Literal["abook", "json"]
@@ -33,19 +41,19 @@ class Query(NamedTuple):
             raise ValueError("Could not parse query: " + s)
 
 
-def render_contact_io(key: int, val: Dict[str, str], fp: TextIO) -> None:
+def render_contact_io(key: int, val: dict[str, str], fp: TextIO) -> None:
     fp.write(f"\n[{key}]\n")
     for k, v in val.items():
         fp.write(f"{k}={v}\n")
 
 
-def render_contact_str(key: int, val: Dict[str, str]) -> str:
+def render_contact_str(key: int, val: dict[str, str]) -> str:
     buf = io.StringIO()
     render_contact_io(key, val, buf)
     return buf.getvalue()
 
 
-def parse_contact_str(s: str) -> Dict[int, Dict[str, str]]:
+def parse_contact_str(s: str) -> dict[int, dict[str, str]]:
     config = configparser.ConfigParser()
     config.read_string(s)
     data = {}
@@ -58,10 +66,10 @@ class AbookData:
     __slots__ = ["items", "format"]
 
     def __init__(
-        self, *, items: Dict[int, Dict[str, str]], format: Dict[str, str]
+        self, *, items: dict[int, dict[str, str]], format: dict[str, str]
     ) -> None:
-        self.items: Dict[int, Dict[str, str]] = items
-        self.format: Dict[str, str] = format
+        self.items: dict[int, dict[str, str]] = items
+        self.format: dict[str, str] = format
 
     def __repr__(self) -> str:
         return f"{self.__class__.__name__}(items={self.items}, format={self.format})"
@@ -69,7 +77,7 @@ class AbookData:
     def __str__(self) -> str:
         return f"{self.__class__.__name__}(items=<{len(self.items)} items>, format={self.format})"
 
-    def __getitem__(self, key: str | int) -> Dict[str, str]:
+    def __getitem__(self, key: str | int) -> dict[str, str]:
         return self.items[int(key)]
 
     def __eq__(self, value: object, /) -> bool:
@@ -92,7 +100,7 @@ class AbookData:
 
         return cls(items={int(k): v for k, v in data.items()}, format=format)
 
-    def keys(self) -> List[str]:
+    def abook_keys(self) -> list[str]:
         from collections import Counter
 
         c: Counter[str] = Counter()
@@ -101,9 +109,18 @@ class AbookData:
                 c[k] += 1
         return [k for k in dict(c.most_common()).keys()]
 
+    def max_index(self) -> int:
+        indices = list(self.items)
+        if not indices:
+            return 0
+        return max(indices)
+
+    def add_contact(self, data: dict[str, str]) -> None:
+        self.items[self.max_index()] = data
+
     def sort(self, sort_key: str) -> None:
-        has_sort_key: List[Dict[str, str]] = []
-        cant_sort: List[Dict[str, str]] = []
+        has_sort_key: list[dict[str, str]] = []
+        cant_sort: list[dict[str, str]] = []
 
         for val in self.items.values():
             if sort_key in val:
@@ -115,26 +132,26 @@ class AbookData:
 
         self.items = {i: data for i, data in enumerate(has_sort_key + cant_sort)}
 
-    def fzf_pick(self, fzf: FzfPrompt) -> Tuple[int, Dict[str, str]]:
-        possible_keys = self.keys()
-        chosen: list[str] = fzf.prompt(possible_keys)
+    def fzf_pick(self, fzf: FzfPrompt) -> Tuple[int, dict[str, str]]:
+        possible_keys = self.abook_keys()
+        chosen: list[str] = fzf.prompt(possible_keys, "--no-multi")
         if not chosen:
             raise RuntimeError("Aborted")
         assert len(chosen) == 1
         ch = chosen[0]
         possible_vals = {k: v for (k, v) in self.items.items() if ch in v}
-        mem: Dict[str, int] = {}
+        mem: dict[str, int] = {}
         for k, v in possible_vals.items():
             prompt = f"{k}: {" ".join(f'{vk}={vv}' for vk, vv in v.items())}"
             mem[prompt] = k
-        chosen = fzf.prompt(mem)
+        chosen = fzf.prompt(mem, "--no-multi")
         if not chosen:
             raise RuntimeError("Aborted")
         found_key = mem[chosen[0]]
         found_val = possible_vals[found_key]
         return found_key, found_val
 
-    def query(self, query: Query) -> Tuple[int, Dict[str, str]]:
+    def query(self, query: Query) -> Tuple[int, dict[str, str]]:
         for key, val in self.items.items():
             for vkey in val:
                 vlower = vkey.lower()
@@ -165,6 +182,11 @@ class AbookData:
         return json.dumps(combined, indent=4)
 
 
+@cache
+def Fzf() -> FzfPrompt:
+    return FzfPrompt(default_options=[])
+
+
 class AbookFile(AbookData):
     __slots__ = ["path", "items", "format"]
 
@@ -183,3 +205,100 @@ class AbookFile(AbookData):
 
     def write(self) -> None:
         self.path.write_text(self.to_abook_fmt())
+
+    def pick(
+        self, *, fzf: FzfPrompt, query: str | None = None, ignore_case: bool = True
+    ) -> Optional[Tuple[int, dict[str, str]]]:
+        found_key: int | None = None
+        found_val: dict[str, str] | None = None
+
+        if query:
+            try:
+                found_key, found_val = self.query(
+                    Query.from_str(query, ignore_case=ignore_case)
+                )
+            except RuntimeError as e:
+                click.echo(str(e), err=True)
+                return None
+        else:
+            try:
+                found_key, found_val = self.fzf_pick(fzf)
+            except RuntimeError as e:
+                click.echo(str(e), err=True)
+                return None
+
+        return found_key, found_val
+
+    def prompt_edit(
+        self,
+        *,
+        fzf: FzfPrompt | None = None,
+        query: str | None = None,
+        ignore_case: bool = True,
+    ) -> bool:
+        if fzf is None:
+            fzf = Fzf()
+
+        res = self.pick(fzf=fzf, query=query, ignore_case=ignore_case)
+        if res is None:
+            return False
+
+        found_key, found_val = res
+        rendered = render_contact_str(found_key, found_val).strip()
+        fixed = click.edit(rendered)
+        if fixed is not None:
+            found = parse_contact_str(fixed)
+            assert len(found) == 1, "expected exactly one item in edited text"
+            fkey = list(found)[0]
+            assert fkey == found_key, f"expected key {fkey} to match {found_key}"
+            new_found_val = found[found_key]
+
+            if new_found_val != found_val:
+                self.items[found_key] = new_found_val
+                return True
+
+        return False
+
+    def prompt_add(
+        self,
+        *,
+        fzf: FzfPrompt | None = None,
+        data: dict[str, str] | None = None,
+    ) -> None:
+        if fzf is None:
+            fzf = Fzf()
+
+        if data is not None:
+            data_lines = [f"{key}={val}" for key, val in data.items()]
+            chosen: list[str] = fzf.prompt(
+                data_lines, "--multi", '--prompt="Select fields to add: "'
+            )
+            parsed = parse_contact_str("[0]\n" + "\n".join(chosen))
+            assert len(parsed) == 1
+            data = list(parsed.values())[0]
+        else:
+            data = {}
+
+        data = {name.lower(): value.strip() for name, value in data.items()}
+
+        if "name" not in data:
+            data["name"] = click.prompt("Name", type=str)
+
+        self.add_contact(data)
+
+    def prompt_edit_or_add(
+        self,
+        *,
+        fzf: FzfPrompt | None = None,
+        query: str | None = None,
+        ignore_case: bool = True,
+    ) -> bool:
+        if fzf is None:
+            fzf = Fzf()
+        res = self.prompt_edit(fzf=fzf, query=query, ignore_case=ignore_case)
+        if res is True:
+            return True
+
+        old = len(self.items)
+        self.prompt_add()
+        return old != len(self.items)
