@@ -92,6 +92,9 @@ def parse(output_type: OutputType, output: Path, file: Path, sort_key: str) -> N
     envvar="ABOOK_FILE",
 )
 def edit(file: Path, query: str, ignore_case: bool) -> None:
+    """
+    Edit a field in the addressbook file
+    """
     ab = AbookFile(path=file)
     changes = ab.prompt_edit(
         query=query,
@@ -113,6 +116,9 @@ def edit(file: Path, query: str, ignore_case: bool) -> None:
     envvar="ABOOK_FILE",
 )
 def add(file: Path) -> None:
+    """
+    Add a new item to the addressbook
+    """
     ab = AbookFile(path=file)
     click.echo(f"Loaded addressbook with {len(ab.items)} items...", err=True)
     ab.prompt_add()
