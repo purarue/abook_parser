@@ -32,6 +32,11 @@ class Query(NamedTuple):
 
     @classmethod
     def from_str(cls, s: str, ignore_case: bool) -> "Query":
+        """
+        E.g. name:alex.*
+
+        Value is treated as a regex
+        """
         for sep in SEPS:
             if sep not in s:
                 continue
@@ -133,22 +138,15 @@ class AbookData:
         self.items = {i: data for i, data in enumerate(has_sort_key + cant_sort)}
 
     def fzf_pick(self, fzf: FzfPrompt) -> Tuple[int, dict[str, str]]:
-        possible_keys = self.abook_keys()
-        chosen: list[str] = fzf.prompt(possible_keys, "--no-multi")
-        if not chosen:
-            raise RuntimeError("Aborted")
-        assert len(chosen) == 1
-        ch = chosen[0]
-        possible_vals = {k: v for (k, v) in self.items.items() if ch in v}
         mem: dict[str, int] = {}
-        for k, v in possible_vals.items():
+        for k, v in self.items.items():
             prompt = f"{k}: {" ".join(f'{vk}={vv}' for vk, vv in v.items())}"
             mem[prompt] = k
         chosen = fzf.prompt(mem, "--no-multi")
         if not chosen:
             raise RuntimeError("Aborted")
-        found_key = mem[chosen[0]]
-        found_val = possible_vals[found_key]
+        found_key: int = mem[chosen[0]]
+        found_val = self.items[found_key]
         return found_key, found_val
 
     def query(self, query: Query) -> Tuple[int, dict[str, str]]:
@@ -181,34 +179,15 @@ class AbookData:
         combined = {"format": self.format, "contacts": self.items}
         return json.dumps(combined, indent=4)
 
-
-@cache
-def Fzf() -> FzfPrompt:
-    return FzfPrompt(default_options=[])
-
-
-class AbookFile(AbookData):
-    __slots__ = ["path", "items", "format"]
-
-    def __init__(self, *, path: Path | str) -> None:
-        self.path = Path(path).expanduser()
-        text = self.path.read_text()
-        ab = AbookData.from_text(text)
-        for key in AbookData.__slots__:
-            setattr(self, key, getattr(ab, key))
-
-    def __repr__(self) -> str:
-        return f"{self.__class__.__name__}(path={self.path})"
-
-    def __str__(self) -> str:
-        return self.__repr__()
-
-    def write(self) -> None:
-        self.path.write_text(self.to_abook_fmt())
-
     def pick(
         self, *, fzf: FzfPrompt, query: str | None = None, ignore_case: bool = True
     ) -> Optional[Tuple[int, dict[str, str]]]:
+        """
+        Picks an item in the addressbook
+
+        Returns the integer index and the item, or None
+        if it was cancelled
+        """
         found_key: int | None = None
         found_val: dict[str, str] | None = None
 
@@ -236,6 +215,11 @@ class AbookFile(AbookData):
         query: str | None = None,
         ignore_case: bool = True,
     ) -> bool:
+        """
+        Edits an item in the addressbook
+
+        Returns True if an edit was made
+        """
         if fzf is None:
             fzf = Fzf()
 
@@ -293,6 +277,9 @@ class AbookFile(AbookData):
         query: str | None = None,
         ignore_case: bool = True,
     ) -> bool:
+        """
+        Returns a bool signifying if something was added/edited
+        """
         if fzf is None:
             fzf = Fzf()
         res = self.prompt_edit(fzf=fzf, query=query, ignore_case=ignore_case)
@@ -302,3 +289,29 @@ class AbookFile(AbookData):
         old = len(self.items)
         self.prompt_add()
         return old != len(self.items)
+
+
+@cache
+def Fzf() -> FzfPrompt:
+    return FzfPrompt(default_options=[])
+
+
+class AbookFile(AbookData):
+    __slots__ = ["path", "items", "format"]
+
+    def __init__(self, *, path: Path | str) -> None:
+        self.path = Path(path).expanduser()
+        text = self.path.read_text()
+        ab = AbookData.from_text(text)
+        for key in AbookData.__slots__:
+            assert key in self.__class__.__slots__
+            setattr(self, key, getattr(ab, key))
+
+    def __repr__(self) -> str:
+        return f"{self.__class__.__name__}(path={self.path})"
+
+    def __str__(self) -> str:
+        return self.__repr__()
+
+    def write(self) -> None:
+        self.path.write_text(self.to_abook_fmt())
