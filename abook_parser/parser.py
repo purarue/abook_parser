@@ -299,7 +299,7 @@ def Fzf() -> FzfPrompt:
 class AbookFile(AbookData):
     __slots__ = ["path", "items", "format"]
 
-    def __init__(self, *, path: Path | str) -> None:
+    def __init__(self, path: Path | str) -> None:
         self.path = Path(path).expanduser()
         text = self.path.read_text()
         ab = AbookData.from_text(text)
