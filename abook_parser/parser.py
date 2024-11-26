@@ -121,7 +121,7 @@ class AbookData:
         return max(indices)
 
     def add_contact(self, data: dict[str, str]) -> None:
-        self.items[self.max_index()] = data
+        self.items[self.max_index() + 1] = data
 
     def sort(self, sort_key: str) -> None:
         has_sort_key: list[dict[str, str]] = []
