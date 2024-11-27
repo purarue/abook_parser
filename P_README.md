@@ -32,6 +32,14 @@ python3 -m abook_parser edit --help
 perl -E 'print "`"x3, "\n"'
 ```
 
+## Library Usage
+
+The `abook_parser.parser.AbookFile` class can be used to interact with your addressbook file in code. Here are some of my scripts:
+
+- [`abz`](https://purarue.xyz/d/abz?redirect) - [`fzf`](https://github.com/junegunn/fzf) based addressbook search script
+- [`abook-populate`](https://github.com/purarue/HPI-personal/blob/master/scripts/abook-populate) - interactively prompts me to add new contacts to my addressbook by parsing my [locally stored Mail](https://github.com/purarue/HPI/blob/master/doc/MAIL_SETUP.md) and [SMS exports](https://github.com/karlicoss/HPI/blob/master/my/smscalls.py)
+- [`birthdays`](https://purarue.xyz/d/birthdays?redirect) - lists upcoming birthdays from my addressbook
+
 ### Tests
 
 ```bash
