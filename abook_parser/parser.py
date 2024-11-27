@@ -3,6 +3,7 @@ import re
 import json
 import configparser
 import io
+from typing import Iterator
 from functools import cache
 
 
@@ -105,11 +106,16 @@ class AbookData:
 
         return cls(items={int(k): v for k, v in data.items()}, format=format)
 
+    # easier to use/consume contacts field
+    @property
+    def contacts(self) -> Iterator[dict[str, str]]:
+        return iter(self.items.values())
+
     def abook_keys(self) -> list[str]:
         from collections import Counter
 
         c: Counter[str] = Counter()
-        for val in self.items.values():
+        for val in self.contacts:
             for k in val:
                 c[k] += 1
         return [k for k in dict(c.most_common()).keys()]
@@ -127,7 +133,7 @@ class AbookData:
         has_sort_key: list[dict[str, str]] = []
         cant_sort: list[dict[str, str]] = []
 
-        for val in self.items.values():
+        for val in self.contacts:
             if sort_key in val:
                 has_sort_key.append(val)
             else:
