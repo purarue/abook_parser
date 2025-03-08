@@ -9,7 +9,7 @@ Requires `python3.12+`
 To install with pip, run:
 
 ```
-pip install git+https://github.com/purarue/abook_parser
+pip install abook_parser
 ```
 
 ## Usage
