@@ -50,5 +50,5 @@ warn_unreachable = "True"
 addopts = ["--verbose", "tests"]
 
 [tool.setuptools.packages.find]
-include = ["abook_parser, abook_parser.*"]
+include = ["abook_parser"]
 exclude = []
