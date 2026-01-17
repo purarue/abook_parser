@@ -3,7 +3,7 @@ import re
 import json
 import configparser
 import io
-from typing import Iterator
+from collections.abc import Iterator
 from functools import cache
 
 
@@ -11,9 +11,7 @@ import click
 from typing import (
     Literal,
     NamedTuple,
-    Tuple,
     TextIO,
-    Optional,
 )
 from pathlib import Path
 
@@ -32,7 +30,7 @@ class Query(NamedTuple):
     ignore_case: bool
 
     @classmethod
-    def from_str(cls, s: str, ignore_case: bool) -> "Query":
+    def from_str(cls, s: str, ignore_case: bool) -> Query:
         """
         E.g. name:alex.*
 
@@ -92,7 +90,7 @@ class AbookData:
         return self.items == value.items and self.format == value.format
 
     @classmethod
-    def from_text(cls, text: str) -> "AbookData":
+    def from_text(cls, text: str) -> AbookData:
 
         config = configparser.ConfigParser()
         config.read_string(text)
@@ -143,7 +141,7 @@ class AbookData:
 
         self.items = {i: data for i, data in enumerate(has_sort_key + cant_sort)}
 
-    def fzf_pick(self, fzf: FzfPrompt) -> Tuple[int, dict[str, str]]:
+    def fzf_pick(self, fzf: FzfPrompt) -> tuple[int, dict[str, str]]:
         mem: dict[str, int] = {}
         for k, v in self.items.items():
             prompt = f"{k}: {" ".join(f'{vk}={vv}' for vk, vv in v.items())}"
@@ -155,7 +153,7 @@ class AbookData:
         found_val = self.items[found_key]
         return found_key, found_val
 
-    def query(self, query: Query) -> Tuple[int, dict[str, str]]:
+    def query(self, query: Query) -> tuple[int, dict[str, str]]:
         for key, val in self.items.items():
             for vkey in val:
                 vlower = vkey.lower()
@@ -187,7 +185,7 @@ class AbookData:
 
     def pick(
         self, *, fzf: FzfPrompt, query: str | None = None, ignore_case: bool = True
-    ) -> Optional[Tuple[int, dict[str, str]]]:
+    ) -> tuple[int, dict[str, str]] | None:
         """
         Picks an item in the addressbook
 
